@@ -1,0 +1,53 @@
+{
+  "mapping_version": "1.0",
+  "contract": "upstream_router_contract.json@1.0",
+  "deployment": "www.yimiagent.cn (FrameFlow app: /opt/video-agent/site/app on video-server-current)",
+  "principle": "The Skill sends capability requests only. Concrete provider/model choice, failover, credentials, billing and transport stay inside the server router (createTask with model 'auto' and the analysis client's auto order). This file maps capability names to existing server entrypoints; it contains no provider/model names.",
+  "status_mapping": {
+    "SUCCEEDED": ["success"],
+    "FAILED": ["fail", "archive_error", "submission_unknown"],
+    "PENDING": ["any other status (waiting / running / ...)"]
+  },
+  "output_mapping": "task.outputs[] {type, url, sourceUrl?, poster?} -> outputs[] {type, uri: url, mime_type?, metadata: {sourceUrl, poster}}",
+  "error_mapping": "task.error -> error.message; error.retryable = true only for transport/upstream failures (router already fails over in auto mode); visual/QA failures are not router errors",
+  "capabilities": {
+    "image_generation": {
+      "kind": "upstream_router", "entrypoint": "POST /api/tasks", "internal": "createTask({kind:'image', model:'auto', ...})",
+      "inputs": {"prompt": "prompt", "references": "refs[] (asset id or URL)", "aspect_ratio": "ratio", "resolution": "resolution"},
+      "poll": "GET /api/tasks/{id}", "quote": "POST /api/tasks/quote"
+    },
+    "image_edit": {
+      "kind": "upstream_router", "entrypoint": "POST /api/tasks", "internal": "createTask({kind:'image', model:'auto', refs:[source, ...references]})",
+      "notes": "Recreation tasks pass recreationOf + shotIndex so the server compiles the SVML-derived execution prompt (compileImagePrompt) and auto-attaches the approved product reference."
+    },
+    "video_generation": {
+      "kind": "upstream_router", "entrypoint": "POST /api/tasks", "internal": "createTask({kind:'video', model:'auto', firstFrame, lastFrame?, refs?, videoRefs?, generateAudio, duration, ratio, resolution, shotGroup?})",
+      "inputs": {"approved_keyframe": "firstFrame", "last_frame": "lastFrame", "motion_reference_video": "videoRefs[]", "audio_reference": "audioRefs[]", "native_audio": "generateAudio (default true: dialogue/SFX/BGM generated with the picture)", "duration_sec": "duration"},
+      "notes": "Recreation segments pass recreationOf + shotGroup; the server compiles compileVideoPrompt (structure + motion + 【声音】 block). generateAudio is forced true for recreation unless the source video is silent. Silent-only channels are bypassed by the router when generateAudio=true. A model without native audio returns a silent clip; media_edit then reports that the segment has no audio instead of hiding it.",
+      "long_video": "POST /api/tasks/multi (segment chaining by last frame, then media_edit)"
+    },
+    "audio_generation": {"kind": "upstream_router", "status": "superseded_in_main_workflow", "notes": "Dialogue/SFX/BGM are produced natively by video_generation. Standalone audio generation remains available to the router but is not called by the default workflows."},
+    "speech_generation": {"kind": "upstream_router", "status": "superseded_in_main_workflow", "notes": "No post-production TTS in the default workflows (V2.2.1)."},
+    "lip_sync": {"kind": "upstream_router", "status": "native", "notes": "Satisfied by native-audio video_generation (mouth movement generated with the spoken line)."},
+    "text_analysis": {"kind": "upstream_router", "entrypoint": "POST /api/ai-write | POST /api/enhance", "internal": "analysis.response(<auto order>, system, content)"},
+    "vision_analysis": {"kind": "upstream_router", "entrypoint": "POST /api/breakdown", "internal": "masterInstructions + shotInstructions -> normalizeJob (one shared GLOBAL MASTER, per-shot plans)"},
+    "video_analysis": {"kind": "composite", "entrypoint": "POST /api/breakdown | POST /api/breakdown/oneclick", "internal": "detectShots + tailEndCards + analyzeSourceAudio + ocrFrame + vision_analysis"},
+    "vision_qa": {"kind": "upstream_router", "internal": "images: scheduleQa -> qaInstructions -> parseQa; videos: scheduleVideoQa -> video-qa.mjs runVideoQa (3 frames + native audio ASR)", "notes": "QA result = {pass, fails[FAIL_*], reason}; no automatic retry (manual 重做 button, normal billing)."},
+    "shot_segmentation": {"kind": "local_deterministic", "internal": "detectShots (ffmpeg scene score > 0.32, 2–24 shots) + shotsFor cache"},
+    "asr": {"kind": "local_deterministic", "endpoint": "ASR_URL/transcribe[?words=1] (local Whisper, per-word timestamps, Simplified Chinese prompt)", "used_by": ["analyzeSourceAudio", "postproduction subtitles alignment"]},
+    "ocr": {"kind": "local_deterministic", "endpoint": "ASR_URL/textboxes", "used_by": ["ocrFrame", "cleanReference (text de-burn)", "tailEndCards", "QA text check"]},
+    "audio_stem_separation": {"kind": "local_deterministic", "status": "partial", "endpoint": "ASR_URL/sounds (local YAMNet events: speech / music genre / instruments / SFX with timestamps)", "notes": "Event classification only, not true stem separation."},
+    "motion_analysis": {"kind": "upstream_router", "status": "partial", "notes": "Motion/camera text comes from vision_analysis per shot (job.shots[].motion/camera/transition)."},
+    "camera_trajectory_analysis": {"kind": "upstream_router", "status": "partial", "notes": "Same as motion_analysis."},
+    "depth_analysis": {"kind": "upstream_router", "status": "not_connected"},
+    "pose_tracking": {"kind": "upstream_router", "status": "not_connected"},
+    "video_to_video": {"kind": "upstream_router", "status": "via_video_generation", "notes": "Models that accept reference videos receive them through videoRefs[]."},
+    "media_edit": {
+      "kind": "local_deterministic", "entrypoint": "POST /api/breakdown/synthesize | POST /api/canvas/synthesize | auto final (scheduleAgentFinal)",
+      "internal": "postproduction.synthesize",
+      "scope": "final edit only: transitions (xfade), subtitles (ASS, aligned to spoken lines via asr), colour grading, beat-sync cuts; keeps each segment's native audio; loudness normalisation"
+    },
+    "audio_mix": {"kind": "local_deterministic", "internal": "postproduction.synthesize", "scope": "crossfade at transitions, optional user-connected music bed, loudnorm. No generated voice/music/SFX."},
+    "compliance_review": {"kind": "composite", "status": "partial", "internal": "tailEndCards (platform end-card removal) + PLATFORM_TEXT sanitizer + text de-burn of reference frames + QA FAIL_UNAUTHORIZED_TEXT"}
+  }
+}
