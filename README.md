@@ -1,7 +1,11 @@
 # VIDEO_AGENT_SKILL V2.2 — 爆款视频二创工作流
 
-> 一条参考视频进去，一套可直接发布的二创成片出来。
-> 在线工作台：**[www.yimiagent.cn](https://www.yimiagent.cn)**
+> 一条爆款视频 → 自动拆解/重写/生成/质检 → 可发布的二创成片。
+
+![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-2.2-blue)
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![Platform](https://img.shields.io/badge/platform-www.yimiagent.cn-orange)
 
 ---
 
@@ -35,10 +39,20 @@
 
 ## 快速开始
 
+### 方式一：网页一键用（零技术门槛）
+
 1. 打开 **[www.yimiagent.cn](https://www.yimiagent.cn)**
 2. 新建「爆款二创」任务，上传一条参考视频
 3. 选择二创档位（保守 / 中度 / 大胆），填写你的产品与要求
 4. 一键生成：拆解 → 脚本 → 关键帧 → 视频 → 质检 → 成片
+
+### 方式二：装进你自己的 Agent（开发者）
+
+本仓库是一套标准 Skill 规范（`SKILL.md` + `specs/` + `schemas/`），任何支持 Skill 的 Agent 平台都可直接加载，**无需登录平台即可离线使用规范本身**：
+
+- **WorkBuddy**：`git clone` 本仓库到 `~/.workbuddy/skills/video-recreation/`
+- **Claude / Cursor**：将 `SKILL.md` 内容作为系统提示词或自定义指令导入
+- **自定义 Agent**：读取 `specs/` 与 `schemas/` 下的机器可读文件，实现你自己的执行器（参考 `executor/router_adapter_yimiagent.py`）
 
 ## 仓库结构
 
@@ -82,5 +96,9 @@ V2.2 强化了完整的二创管线：原片镜头切分 + ASR/OCR/音频分析�
 ## 关于
 
 本工作流运行在 **[www.yimiagent.cn](https://www.yimiagent.cn)** —— 一个可视化视频智能体工作台，支持文生图、图生图、图生视频、FFmpeg 剪辑合成，以及电商、AI 漫剧、爆款二创等行业工作流。
+
+## License
+
+[MIT](./LICENSE)
 
 **关键词**：视频二创 · 爆款视频拆解 · AI 视频工作流 · 短视频带货 · 图生视频 · 人物一致性 · 商品锚点 · TikTok 二创 · 抖音二创 · AI 漫剧 · 风水视频 · 民俗短视频 · 视频批量生产 · video recreation skill · short video automation
